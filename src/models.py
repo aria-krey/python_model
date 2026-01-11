@@ -10,7 +10,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-
+from sklearn.metrics import f1_score
 
 class ModelTrainer:
     """
@@ -56,6 +56,7 @@ class ModelTrainer:
 
             # Предсказания
             y_pred = model.predict(X_test)
+            test_f1 = f1_score(y_test, y_pred, average='macro')
 
             # Кросс-валидация
             cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=self.random_state)
@@ -74,13 +75,16 @@ class ModelTrainer:
             self.results[name] = {
                 'model': model,
                 'test_accuracy': test_accuracy,
+                'test_f1': test_f1,          # ← ВАЖНО
                 'cv_mean': cv_mean,
                 'predictions': y_pred,
                 'report': classification_report(y_test, y_pred, output_dict=True)
             }
 
+
             print(f"CV F1 (train): {cv_mean:.4f}")
             print(f"Точность на тесте: {test_accuracy:.4f}")
+            print(f"F1 macro на тесте: {test_f1:.4f}")
             print(f"Разница: {abs(cv_mean - test_accuracy):.4f}")
 
             if abs(cv_mean - test_accuracy) > 0.05:
@@ -99,7 +103,7 @@ class ModelTrainer:
 
         best_model_name = max(
             self.results.items(),
-            key=lambda x: x[1]['test_accuracy']
+            key=lambda x: x[1]['test_f1']
         )[0]
 
         return best_model_name, self.results[best_model_name]
@@ -115,16 +119,16 @@ class ModelTrainer:
 
             comparison_data.append({
                 'Model': name,
-                'Train CV (F1)': round(cv_value, 4) if cv_value is not None else '—',
-                'Test Accuracy': round(result['test_accuracy'], 4),
-                'Difference': round(abs(cv_value - result['test_accuracy']), 4)
-                if cv_value is not None else '—'
+                'Train CV (F1)': round(result['cv_mean'], 4),
+                'Test F1': round(result['test_f1'], 4),
+                'Difference': round(abs(result['cv_mean'] - result['test_f1']), 4)
             })
 
-        return (
-            pd.DataFrame(comparison_data)
-            .sort_values('Test Accuracy', ascending=False)
+
+        return pd.DataFrame(comparison_data).sort_values(
+            'Test F1', ascending=False
         )
+
 
     # --------------------------------------------------
     # Детальный отчет
