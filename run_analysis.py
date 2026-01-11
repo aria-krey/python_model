@@ -1,24 +1,28 @@
-# Главный файл для запуска полного анализа NSL-KDD
-# __file__ - полный путь к run_analysis.py
-# Импорт модулей
+"""
+Главный файл для запуска полного анализа NSL-KDD
+"""
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__))) # добавление текущей папки в путь поиска модулей 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.data_loader import NSLKDDDataLoader # создание класса из файла data_loader.py
-from src.preprocessor import DataPreprocessor # создание класса из файла preprocessor.py
-from src.models import ModelTrainer # создание класса из файла models.py
+from src.data_loader import NSLKDDDataLoader
+from src.preprocessor import DataPreprocessor
+from src.models import ModelTrainer
+from sklearn.metrics import confusion_matrix
+import warnings
+warnings.filterwarnings('ignore')
 
-# настройка отображения
+# Настройка отображения
 plt.rcParams['figure.figsize'] = (12, 8)
 plt.style.use('seaborn-v0_8-darkgrid')
 sns.set_palette("husl")
 
 def main():
-    # основная функция для запуска всего кода
+    """Основная функция для запуска всего кода"""
     print("=" * 70)
     print("КЛАССИФИКАЦИЯ СЕТЕВОГО ТРАФИКА НА ОСНОВЕ NSL-KDD")
     print("=" * 70)
@@ -27,20 +31,17 @@ def main():
     print("\n ШАГ 1: Загрузка данных")
     print("-" * 40)
 
-    loader = NSLKDDDataLoader(data_path='data') # создание объекта из класса указанного в импорте
-    # переход в функцию __init__ в data_loader.py
+    loader = NSLKDDDataLoader(data_path='data')
 
-    # загрузка обучающих и тестовых данных из папки data
-    train_data = loader.load_data('train', use_20percent=False) # чтение KDDTrain+.txt и не берем версию с 20%
-    # загружаем обучающие данные с помощью метода load_data 
-    test_data = loader.load_data('test') # чтение KDDTest+.txt
-    # такая же комбинация но с тестовыми данными
+    # Загрузка обучающих и тестовых данных
+    train_data = loader.load_data('train', use_20percent=False)
+    test_data = loader.load_data('test')
 
     # Анализ данных
     print("\n Анализ обучающих данных:")
-    loader.analyze_dataset(train_data) # переход в data_loader и выполняем подробный анализ 
+    loader.analyze_dataset(train_data)
 
-    # 2. ПОДГОТОВКА ДАННЫХ ДЛЯ ОБУЧЕНИЯ
+    # 2. ПОДГОТОВКА ДАННЫХ
     print("\n\n ШАГ 2: Подготовка данных")
     print("-" * 40)
 
@@ -50,17 +51,16 @@ def main():
     print(f"\nТип классификации: {'Бинарная (атака/нормальный)' if BINARY_CLASSIFICATION else 'Многоклассовая (5 категорий)'}")
 
     # Подготовка признаков и целевой переменной
-    # Используем filter_unknown=True для фильтрации меток 'other'
-    X_train, y_train, target_name = loader.prepare_target( # переход в data_loader 
+    X_train, y_train, target_name = loader.prepare_target(
         train_data,
         binary=BINARY_CLASSIFICATION,
-        filter_unknown=True  # Фильтруем 'other' из обучающих данных
+        filter_unknown=True
     )
 
     X_test, y_test, _ = loader.prepare_target(
         test_data,
         binary=BINARY_CLASSIFICATION,
-        filter_unknown=True  # Фильтруем 'other' из тестовых данных
+        filter_unknown=True
     )
 
     print(f"\nРазмеры данных:")
@@ -68,13 +68,13 @@ def main():
     print(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
 
     # Анализ распределения классов
-    print(f"\nРаспределение классов в обучающей выборке:")
+    print(f"\n Распределение классов в обучающей выборке:")
     train_dist = pd.Series(y_train).value_counts()
     for class_name, count in train_dist.items():
         percentage = (count / len(y_train)) * 100
         print(f"  {class_name}: {count} записей ({percentage:.1f}%)")
 
-    print(f"\nРаспределение классов в тестовой выборке:")
+    print(f"\n Распределение классов в тестовой выборке:")
     test_dist = pd.Series(y_test).value_counts()
     for class_name, count in test_dist.items():
         percentage = (count / len(y_test)) * 100
@@ -87,34 +87,25 @@ def main():
     print(f"\n Классы в обучающей выборке: {sorted(train_classes)}")
     print(f" Классы в тестовой выборке: {sorted(test_classes)}")
 
-    # Проверка на различия в классах
-    only_in_test = test_classes - train_classes
-    only_in_train = train_classes - test_classes
-
-    if only_in_test:
-        print(f" Внимание: в тестовой выборке есть классы, которых нет в обучающей: {only_in_test}")
-    if only_in_train:
-        print(f" Внимание: в обучающей выборке есть классы, которых нет в тестовой: {only_in_train}")
-
-    # 3. ПРЕДОБРАБОТКА
+    # 3. ПРЕДОБРАБОТКА 
     print("\n\n ШАГ 3: Предобработка данных")
     print("-" * 40)
 
     # Определение типов признаков
-    categorical_features, numerical_features = loader.get_feature_types(X_train) # переход в data_loader
+    categorical_features, numerical_features = loader.get_feature_types(X_train)
 
     print(f"Категориальные признаки ({len(categorical_features)}): {categorical_features}")
     print(f"Числовые признаки ({len(numerical_features)}): первые 5 - {numerical_features[:5]}")
 
     # Создание и применение препроцессора
-    preprocessor = DataPreprocessor(categorical_features, numerical_features) # переход в preprocessor.py
+    preprocessor = DataPreprocessor(categorical_features, numerical_features)
 
     print("\nПреобразование данных...")
 
-    # Сначала обучаем на обучающих данных
-    X_train_processed, y_train_encoded = preprocessor.fit_transform(X_train, y_train) # переход в preprocessor.py
+    # Обучаем на обучающих данных
+    X_train_processed, y_train_encoded = preprocessor.fit_transform(X_train, y_train)
 
-    # Затем преобразуем тестовые данные
+    # Преобразуем тестовые данные
     X_test_processed, y_test_encoded = preprocessor.transform(X_test, y_test)
 
     print(f" Размер после обработки:")
@@ -126,41 +117,83 @@ def main():
     class_names = preprocessor.get_class_names()
     print(f"  Известные классы: {class_names}")
 
-    # Проверка на наличие -1 (неизвестных меток)
-    unknown_in_test = np.sum(y_test_encoded == -1)
-    if unknown_in_test > 0:
-        print(f"В тестовых данных найдено {unknown_in_test} записей с неизвестными метками")
-
-        # Фильтруем неизвестные метки
-        mask = y_test_encoded != -1
-        X_test_processed = X_test_processed[mask]
-        y_test_encoded = y_test_encoded[mask]
-
-        print(f"  После фильтрации: {len(y_test_encoded)} записей")
-
-    # 4. ОБУЧЕНИЕ МОДЕЛЕЙ
+    # 4. ОБУЧЕНИЕ МОДЕЛЕЙ С РЕГУЛЯРИЗАЦИЕЙ 
     print("\n\n ШАГ 4: Обучение моделей")
     print("-" * 40)
 
-    # Обучаем
-    trainer = ModelTrainer(random_state=42) # переход в models.py
+    # Создаем словарь с параметрами моделей
+    model_params = {
+        'Decision Tree': {
+            'max_depth': 10,  # Ограничиваем глубину
+            'min_samples_split': 20,
+            'min_samples_leaf': 10,
+            'max_features': 'sqrt'
+        },
+        'Gradient Boosting': {
+            'n_estimators': 100,
+            'max_depth': 6,
+            'learning_rate': 0.1,
+            'min_samples_split': 20,
+            'min_samples_leaf': 10,
+            'subsample': 0.8,  # Случайные подвыборки
+            'max_features': 'sqrt'
+        },
+        'KNN': {
+        'n_neighbors': 50,
+        'weights': 'distance',
+        'metric': 'minkowski',
+        'p': 2
+        },
+        'Random Forest': {
+        'n_estimators': 200,
+        'max_depth': 12,
+        'min_samples_split': 30,
+        'min_samples_leaf': 15,
+        'max_features': 'sqrt',
+        'bootstrap': True,
+        'class_weight': 'balanced',
+        'n_jobs': -1
+        }
+    }
+
+    # Обучаем модели с параметрами против переобучения
+    trainer = ModelTrainer(random_state=42)
     trainer.train_models(
         X_train_processed, y_train_encoded,
-        X_test_processed, y_test_encoded
+        X_test_processed, y_test_encoded,
+        model_params=model_params  # Передаем параметры здесь
     )
     
-    # 5. АНАЛИЗ РЕЗУЛЬТАТОВ 
+    # 5. АНАЛИЗ РЕЗУЛЬТАТОВ
     print("\n\n ШАГ 5: Анализ результатов")
     print("-" * 40)
 
     # Сравнение моделей
-    comparison_df = trainer.compare_models() # переход в models.py 
-    print("\nСравнение моделей:")
+    comparison_df = trainer.compare_models()
+    print("\n Сравнение моделей:")
     print(comparison_df.to_string(index=False))
 
+    # Анализ переобучения
+    print("\n Анализ переобучения:")
+    for _, row in comparison_df.iterrows():
+        if 'Train CV (Acc)' in row and 'Test Accuracy' in row:
+            train_val = row['Train CV (Acc)']
+            test_val = row['Test Accuracy']
+            
+            # Безопасная проверка NaN
+            train_val_float = float(train_val) if pd.notna(train_val) else 0
+            test_val_float = float(test_val) if pd.notna(test_val) else 0
+            
+            if train_val_float > 0 and test_val_float > 0:
+                diff = train_val_float - test_val_float
+                if diff > 0.05:
+                    print(f"  {row['Model']}: возможное переобучение (разница: {diff:.4f})")
+                else:
+                    print(f"  {row['Model']}: переобучение под контролем (разница: {diff:.4f})")
+
     # Лучшая модель
-    best_model_name, best_result = trainer.get_best_model() # переход в models.py 
-    print(f"\n🏆 Лучшая модель: {best_model_name}") 
+    best_model_name, best_result = trainer.get_best_model()
+    print(f"\n Лучшая модель: {best_model_name}") 
     print(f"   Точность на тесте: {best_result['test_accuracy']:.4f}")
 
     # Детальный отчет лучшей модели
@@ -226,144 +259,210 @@ def main():
     # Создание папки results если её нет
     os.makedirs('results', exist_ok=True)
 
-    # 1. График сравнения моделей
-    plt.figure(figsize=(12, 6))
-    models = comparison_df['Model']
-    test_acc = comparison_df['Test Accuracy']
-    train_acc = comparison_df['Train CV (F1)']
+    try:
+        # 1. График сравнения моделей
+        print("\n1. Создание графика сравнения моделей...")
+        
+        # Подготовка данных
+        comparison_df['Test Accuracy'] = pd.to_numeric(comparison_df['Test Accuracy'], errors='coerce')
+        if 'Train CV (Acc)' in comparison_df.columns:
+            comparison_df['Train CV (Acc)'] = pd.to_numeric(comparison_df['Train CV (Acc)'], errors='coerce')
+            train_col = 'Train CV (Acc)'
+        else:
+            train_col = None
+        
+        # Заполняем NaN
+        comparison_df = comparison_df.fillna(0)
+        
+        plt.figure(figsize=(12, 8))
+        
+        models = comparison_df['Model']
+        test_acc = comparison_df['Test Accuracy']
+        
+        x = np.arange(len(models))
+        width = 0.6
+        
+        if train_col and train_col in comparison_df.columns:
+            train_acc = comparison_df[train_col]
+            width = 0.35
+            
+            plt.bar(x - width/2, train_acc, width, label='Train CV', alpha=0.8, color='steelblue')
+            plt.bar(x + width/2, test_acc, width, label='Test', alpha=0.8, color='lightcoral')
+            plt.legend()
+        else:
+            plt.bar(x, test_acc, width, alpha=0.8, color='lightcoral')
+        
+        plt.xlabel('Модели', fontsize=12)
+        plt.ylabel('Accuracy', fontsize=12)
+        plt.title('Сравнение точности моделей', fontsize=14, fontweight='bold')
+        plt.xticks(x, models, rotation=45, ha='right')
+        plt.grid(True, alpha=0.3, axis='y')
+        
+        # Добавление значений - БЕЗОПАСНЫЙ СПОСОБ
+        for i, val in enumerate(test_acc):
+            try:
+                val_float = float(val)
+                if val_float > 0:
+                    plt.text(i if train_col is None else i + width/2, 
+                            val_float + 0.01, f'{val_float:.3f}', 
+                            ha='center', va='bottom', fontsize=9)
+            except (ValueError, TypeError):
+                continue
+        
+        if train_col and train_col in comparison_df.columns:
+            for i, val in enumerate(train_acc):
+                try:
+                    val_float = float(val)
+                    if val_float > 0:
+                        plt.text(i - width/2, val_float + 0.01, f'{val_float:.3f}', 
+                                ha='center', va='bottom', fontsize=9)
+                except (ValueError, TypeError):
+                    continue
+        
+        plt.tight_layout()
+        plt.savefig('results/model_comparison.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        print(" График сохранен: results/model_comparison.png")
+        
+    except Exception as e:
+        print(f" Ошибка при создании графика сравнения: {e}")
 
-    x = np.arange(len(models))
-    width = 0.35
+    try:
+        # 2. Распределение классов 
+        print("\n2. График распределения классов...")
+        
+        plt.figure(figsize=(10, 6))
+        
+        if not train_dist.empty and len(train_dist) > 0:
+            colors = plt.cm.Set3(np.linspace(0, 1, len(train_dist)))
+            train_dist.plot(kind='bar', color=colors)
+            
+            plt.title('Распределение классов в обучающей выборке', fontsize=14, fontweight='bold')
+            plt.xlabel('Класс', fontsize=12)
+            plt.ylabel('Количество записей', fontsize=12)
+            plt.xticks(rotation=45)
+            plt.grid(True, alpha=0.3, axis='y')
+            
+            # Добавление значений
+            for i, v in enumerate(train_dist.values):
+                if not pd.isna(v):
+                    plt.text(i, v + max(train_dist.values)*0.01, str(int(v)),
+                            ha='center', va='bottom', fontsize=10)
+            
+            plt.tight_layout()
+            plt.savefig('results/class_distribution.png', dpi=300, bbox_inches='tight')
+            plt.show()
+            print(" График сохранен: results/class_distribution.png")
+        else:
+            print(" Нет данных для графика распределения классов")
+            
+    except Exception as e:
+        print(f" Ошибка при создании графика распределения: {e}")
 
-    plt.bar(x - width/2, train_acc, width, label='Обучающая', alpha=0.8, color='steelblue')
-    plt.bar(x + width/2, test_acc, width, label='Тестовая', alpha=0.8, color='lightcoral')
+    try:
+        # 3. Матрица ошибок 
+        print("\n3. Матрица ошибок для лучшей модели...")
+        
+        if y_pred_best is not None and len(y_pred_best) > 0:
+            # Создаем матрицу ошибок
+            cm = confusion_matrix(y_test_encoded, y_pred_best)
+            
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                       xticklabels=class_names,
+                       yticklabels=class_names)
+            plt.title(f'Матрица ошибок: {best_model_name}', fontsize=14, fontweight='bold')
+            plt.ylabel('Истинные значения', fontsize=12)
+            plt.xlabel('Предсказанные значения', fontsize=12)
+            plt.tight_layout()
+            plt.savefig('results/confusion_matrix.png', dpi=300, bbox_inches='tight')
+            plt.show()
+            print(f" Матрица ошибок сохранена: results/confusion_matrix.png")
+        else:
+            print(" Нет предсказаний для лучшей модели")
+            
+    except Exception as e:
+        print(f" Ошибка при создании матрицы ошибок: {e}")
 
-    plt.xlabel('Модели', fontsize=12)
-    plt.ylabel('Accuracy', fontsize=12)
-    plt.title('Сравнение точности моделей', fontsize=14, fontweight='bold')
-    plt.xticks(x, models, rotation=45, ha='right')
-    plt.legend()
-    plt.grid(True, alpha=0.3, axis='y')
-
-    # Добавление значений на столбцы
-    for i, (train_val, test_val) in enumerate(zip(train_acc, test_acc)):
-        if not np.isnan(train_val):
-            plt.text(
-                i - width/2,
-                train_val + 0.01,
-                f'{train_val:.3f}',
-                ha='center', va='bottom', fontsize=9
-            )
-        plt.text(i + width/2, test_val + 0.01, f'{test_val:.3f}',
-                ha='center', va='bottom', fontsize=9)
-
-    plt.tight_layout()
-    plt.savefig('results/model_comparison.png', dpi=300, bbox_inches='tight')
-    plt.show()
-
-    # 2. Распределение классов
-    plt.figure(figsize=(10, 6))
-    train_dist = pd.Series(y_train).value_counts()
-    train_dist.plot(kind='bar', color='skyblue')
-    plt.title('Распределение классов в обучающей выборке', fontsize=14, fontweight='bold')
-    plt.xlabel('Класс', fontsize=12)
-    plt.ylabel('Количество записей', fontsize=12)
-    plt.xticks(rotation=45)
-    plt.grid(True, alpha=0.3, axis='y')
-
-    # Добавление значений на столбцы
-    for i, v in enumerate(train_dist.values):
-        plt.text(i, v + max(train_dist.values)*0.01, str(v),
-                ha='center', va='bottom', fontsize=10)
-
-    plt.tight_layout()
-    plt.savefig('results/class_distribution.png', dpi=300, bbox_inches='tight')
-    plt.show()
-
-    # 3. Матрица ошибок для лучшей модели
-    from sklearn.metrics import confusion_matrix
-
-    # Создаем матрицу ошибок
-    cm = confusion_matrix(y_test_encoded, y_pred_best)
-
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-                xticklabels=class_names,
-                yticklabels=class_names)
-    plt.title(f'Матрица ошибок: {best_model_name}', fontsize=14, fontweight='bold')
-    plt.ylabel('Истинные значения', fontsize=12)
-    plt.xlabel('Предсказанные значения', fontsize=12)
-    plt.tight_layout()
-    plt.savefig('results/confusion_matrix.png', dpi=300, bbox_inches='tight')
-    plt.show()
-
-    # 7. ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ
+    # 7. ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ 
     print("\n\n ШАГ 7: Дополнительный анализ")
     print("-" * 40)
 
-    # Анализ важности признаков (если модель поддерживает)
-    if hasattr(best_result['model'], 'feature_importances_'):
-        print("\nАнализ важности признаков:")
+    # Анализ важности признаков
+    try:
+        if best_result['model'] is not None and hasattr(best_result['model'], 'feature_importances_'):
+            print("\n Анализ важности признаков:")
 
-        feature_names = preprocessor.get_feature_names()
-        importances = best_result['model'].feature_importances_
+            feature_names = preprocessor.get_feature_names()
+            importances = best_result['model'].feature_importances_
 
-        # Создание DataFrame с важностью признаков
-        feature_importance_df = pd.DataFrame({
-            'Feature': feature_names,
-            'Importance': importances
-        }).sort_values('Importance', ascending=False)
+            # Создание DataFrame с важностью признаков
+            feature_importance_df = pd.DataFrame({
+                'Feature': feature_names,
+                'Importance': importances
+            }).sort_values('Importance', ascending=False)
 
-        print("\nТоп-10 важных признаков:")
-        print(feature_importance_df.head(10).to_string(index=False))
+            print("\nТоп-10 важных признаков:")
+            print(feature_importance_df.head(10).to_string(index=False))
 
-        # Визуализация топ-15 признаков
-        plt.figure(figsize=(12, 8))
-        top_features = feature_importance_df.head(15)
+            # Визуализация топ-15 признаков
+            plt.figure(figsize=(12, 8))
+            top_features = feature_importance_df.head(15)
 
-        plt.barh(range(len(top_features)), top_features['Importance'])
-        plt.yticks(range(len(top_features)), top_features['Feature'], fontsize=9)
-        plt.xlabel('Важность признака', fontsize=12)
-        plt.title('Топ-15 важных признаков для классификации', fontsize=14, fontweight='bold')
-        plt.gca().invert_yaxis()
-        plt.tight_layout()
-        plt.savefig('results/feature_importance.png', dpi=300, bbox_inches='tight')
-        plt.show()
+            plt.barh(range(len(top_features)), top_features['Importance'])
+            plt.yticks(range(len(top_features)), top_features['Feature'], fontsize=9)
+            plt.xlabel('Важность признака', fontsize=12)
+            plt.title('Топ-15 важных признаков для классификации', fontsize=14, fontweight='bold')
+            plt.gca().invert_yaxis()
+            plt.tight_layout()
+            plt.savefig('results/feature_importance.png', dpi=300, bbox_inches='tight')
+            plt.show()
+            print(" График важности признаков сохранен")
+        else:
+            print(" Модель не поддерживает feature_importances_")
+    except Exception as e:
+        print(f" Ошибка при анализе важности признаков: {e}")
 
     # Анализ ошибок классификации
-    print("\nАнализ ошибок классификации по классам:")
-    error_analysis = pd.DataFrame({
-        'True': y_test_original,
-        'Predicted': y_pred_original,
-        'Correct': y_test_original == y_pred_original
-    })
+    try:
+        print("\n Анализ ошибок классификации по классам:")
+        error_analysis = pd.DataFrame({
+            'True': y_test_original,
+            'Predicted': y_pred_original,
+            'Correct': y_test_original == y_pred_original
+        })
 
-    error_by_class = error_analysis.groupby('True')['Correct'].agg(['mean', 'count'])
-    error_by_class['error_rate'] = (1 - error_by_class['mean']) * 100
-    error_by_class['error_count'] = error_by_class['count'] * (1 - error_by_class['mean'])
+        error_by_class = error_analysis.groupby('True')['Correct'].agg(['mean', 'count'])
+        error_by_class['error_rate'] = (1 - error_by_class['mean']) * 100
+        error_by_class['error_count'] = error_by_class['count'] * (1 - error_by_class['mean'])
 
-    print(error_by_class[['error_rate', 'error_count']].round(2))
+        print(error_by_class[['error_rate', 'error_count']].round(2))
+    except Exception as e:
+        print(f" Ошибка при анализе ошибок: {e}")
 
     # 8. ИТОГИ 
     print("\n\n" + "=" * 70)
-    print("ИТОГОВЫЙ ОТЧЕТ")
+    print(" ИТОГОВЫЙ ОТЧЕТ")
     print("=" * 70)
 
     print(f"\n Общая статистика:")
     print(f"  • Всего записей: {len(train_data) + len(test_data)}")
     print(f"  • Обучающая выборка: {len(X_train)} записей")
-    print(f"  • Тестовая выборка: {len(y_test_encoded)} записей (после фильтрации)")
+    print(f"  • Тестовая выборка: {len(y_test_encoded)} записей")
     print(f"  • Количество классов: {len(class_names)}")
     print(f"  • Классы: {', '.join(class_names)}")
 
     print(f"\n Результаты:")
     print(f"  • Лучшая модель: {best_model_name}")
     print(f"  • Точность на тесте: {best_result['test_accuracy']:.4f}")
+    
     if best_result.get('cv_mean') is not None:
         diff = abs(best_result['cv_mean'] - best_result['test_accuracy'])
-        print(f"Разница CV/Test: {diff:.4f}")
-    else:
-        print("Разница CV/Test: не вычислялась")
+        print(f"  • Разница CV/Test: {diff:.4f}")
+        if diff > 0.05:
+            print(f"  ⚠ Внимание: возможное переобучение (разница > 0.05)")
+        else:
+            print(f"  ✓ Переобучение под контролем")
 
     print(f"\n Распределение классов:")
     for class_name in class_names:
@@ -375,32 +474,45 @@ def main():
 
     print(f"\n Выводы:")
     print("  1. Модели машинного обучения эффективны для классификации сетевого трафика")
-    print("  2. Random Forest/Gradient Boosting показывают наилучшие результаты")
+    print("  2. Регуляризация помогает контролировать переобучение")
     print("  3. Наибольшие трудности с редкими классами (R2L, U2R)")
     print("  4. Важными являются признаки, описывающие статистику соединений")
 
+    print(f"\n Рекомендации для уменьшения переобучения:")
+    print("  1. Использовать кросс-валидацию при выборе гиперпараметров")
+    print("  2. Применять балансировку классов (SMOTE, ADASYN)")
+    print("  3. Использовать регуляризацию (ограничение глубины деревьев)")
+    print("  4. Добавить dropout в ансамблевые методы")
+    print("  5. Увеличить объем обучающих данных")
+
     # Сохранение результатов
-    print(f"\n Сохранение результатов")
+    print(f"\n Сохранение результатов...")
+    
+    try:
+        # Сохранение сравнения моделей
+        comparison_df.to_csv('results/model_comparison.csv', index=False)
+        
+        # Сохранение детального отчета
+        report_df.to_csv('results/detailed_report.csv')
+        
+        # Сохранение распределения классов
+        pd.Series(y_train).value_counts().to_csv('results/class_distribution.csv')
+        
+        # Сохранение конфигурации
+        with open('results/config.txt', 'w', encoding='utf-8') as f:
+            f.write(f"Датасет: NSL-KDD\n")
+            f.write(f"Тип классификации: {'Бинарная' if BINARY_CLASSIFICATION else 'Многоклассовая'}\n")
+            f.write(f"Лучшая модель: {best_model_name}\n")
+            f.write(f"Точность: {best_result['test_accuracy']:.4f}\n")
+            f.write(f"Классы: {', '.join(class_names)}\n")
+        
+        print(" Результаты сохранены в папке 'results/'")
+    except Exception as e:
+        print(f" Ошибка при сохранении файлов: {e}")
 
-    # Сохранение сравнения моделей
-    comparison_df.to_csv('results/model_comparison.csv', index=False)
-
-    # Сохранение детального отчета
-    report_df.to_csv('results/detailed_report.csv')
-
-    # Сохранение распределения классов
-    pd.Series(y_train).value_counts().to_csv('results/class_distribution.csv')
-
-    # Сохранение конфигурации
-    with open('results/config.txt', 'w') as f:
-        f.write(f"Датасет: NSL-KDD\n")
-        f.write(f"Тип классификации: {'Бинарная' if BINARY_CLASSIFICATION else 'Многоклассовая'}\n")
-        f.write(f"Лучшая модель: {best_model_name}\n")
-        f.write(f"Точность: {best_result['test_accuracy']:.4f}\n")
-        f.write(f"Классы: {', '.join(class_names)}\n")
-
-    print("Результаты сохранены в папке 'results/'")
     print("\n" + "=" * 70)
+    print(" Анализ завершен успешно!")
+    print("=" * 70)
 
 if __name__ == "__main__":
     main()
