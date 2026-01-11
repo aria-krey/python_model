@@ -11,20 +11,15 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
-
+# Класс для обучения, оценки и сравнения моделей
 class ModelTrainer:
-    """
-    Класс для обучения, оценки и сравнения моделей
-    """
 
     def __init__(self, random_state=42):
         self.random_state = random_state
         self.models = {}
         self.results = {}
 
-    # --------------------------------------------------
-    # Создание моделей
-    # --------------------------------------------------
+    # Создание моделей 
     def get_models(self):
         return {
             'Decision Tree': DecisionTreeClassifier(random_state=self.random_state),
@@ -33,9 +28,7 @@ class ModelTrainer:
             'KNN': KNeighborsClassifier()
         }
 
-    # --------------------------------------------------
     # Обучение и оценка моделей
-    # --------------------------------------------------
     def train_models(self, X_train, y_train, X_test, y_test, model_params=None):
         models = self.get_models()
 
@@ -84,15 +77,13 @@ class ModelTrainer:
             print(f"Разница: {abs(cv_mean - test_accuracy):.4f}")
 
             if abs(cv_mean - test_accuracy) > 0.05:
-                print("⚠ Возможное переобучение")
+                print("Возможное переобучение")
             else:
-                print("✓ Модель устойчива")
+                print("Модель устойчива")
 
         return self.results
 
-    # --------------------------------------------------
     # Лучшая модель
-    # --------------------------------------------------
     def get_best_model(self):
         if not self.results:
             raise ValueError("Сначала обучите модели!")
@@ -104,9 +95,7 @@ class ModelTrainer:
 
         return best_model_name, self.results[best_model_name]
 
-    # --------------------------------------------------
     # Сравнение моделей
-    # --------------------------------------------------
     def compare_models(self):
         comparison_data = []
 
@@ -126,9 +115,7 @@ class ModelTrainer:
             .sort_values('Test Accuracy', ascending=False)
         )
 
-    # --------------------------------------------------
     # Детальный отчет
-    # --------------------------------------------------
     def get_detailed_report(self, y_test, y_pred):
         report = classification_report(y_test, y_pred, output_dict=True)
         df_report = pd.DataFrame(report).transpose()

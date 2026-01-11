@@ -16,8 +16,8 @@ class DataPreprocessor:
         # 1. Создание препроцессора - главного инструмента преобразования
         self.preprocessor = ColumnTransformer(
             transformers=[
-                ('num', RobustScaler(), numerical_features),
-                ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False),
+                ('num', RobustScaler(), numerical_features), # RobustScaler вычисляет медиану и IQR для числовых признаков
+                ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), # OneHotEncoder определяет все категории для категориальных признаков
                  categorical_features)
             ]
         )

@@ -1,9 +1,8 @@
-"""
-Главный файл для запуска полного анализа NSL-KDD
-"""
+# Главный файл для запуска полного анализа NSL-KDD
+
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.abspath(__file__))) # настройка к папке проекта
 
 import pandas as pd
 import numpy as np
@@ -21,8 +20,9 @@ plt.rcParams['figure.figsize'] = (12, 8)
 plt.style.use('seaborn-v0_8-darkgrid')
 sns.set_palette("husl")
 
+# Основная функция для запуска всего кода
 def main():
-    """Основная функция для запуска всего кода"""
+
     print("=" * 70)
     print("КЛАССИФИКАЦИЯ СЕТЕВОГО ТРАФИКА НА ОСНОВЕ NSL-KDD")
     print("=" * 70)
@@ -31,22 +31,22 @@ def main():
     print("\n ШАГ 1: Загрузка данных")
     print("-" * 40)
 
-    loader = NSLKDDDataLoader(data_path='data')
+    loader = NSLKDDDataLoader(data_path='data') # создание экземпляра загрузчика данных
 
     # Загрузка обучающих и тестовых данных
-    train_data = loader.load_data('train', use_20percent=False)
+    train_data = loader.load_data('train', use_20percent=False) # выборка из полного набора 
     test_data = loader.load_data('test')
 
     # Анализ данных
     print("\n Анализ обучающих данных:")
-    loader.analyze_dataset(train_data)
+    loader.analyze_dataset(train_data) # вывод статистики по загруженным данным 
 
     # 2. ПОДГОТОВКА ДАННЫХ
     print("\n\n ШАГ 2: Подготовка данных")
     print("-" * 40)
 
-    # Выберите тип классификации (True - бинарная, False - многоклассовая)
-    BINARY_CLASSIFICATION = False  # Измените на True для бинарной
+    # Выбор типа классификации (True - бинарная, False - многоклассовая)
+    BINARY_CLASSIFICATION = False  # Изменить на True для бинарной
 
     print(f"\nТип классификации: {'Бинарная (атака/нормальный)' if BINARY_CLASSIFICATION else 'Многоклассовая (5 категорий)'}")
 
@@ -60,7 +60,7 @@ def main():
     X_test, y_test, _ = loader.prepare_target(
         test_data,
         binary=BINARY_CLASSIFICATION,
-        filter_unknown=True
+        filter_unknown=True # удаление записи с меткой other
     )
 
     print(f"\nРазмеры данных:")
@@ -69,7 +69,7 @@ def main():
 
     # Анализ распределения классов
     print(f"\n Распределение классов в обучающей выборке:")
-    train_dist = pd.Series(y_train).value_counts()
+    train_dist = pd.Series(y_train).value_counts() # подсчет сколько раз встречается каждый класс в словарь
     for class_name, count in train_dist.items():
         percentage = (count / len(y_train)) * 100
         print(f"  {class_name}: {count} записей ({percentage:.1f}%)")
@@ -81,7 +81,7 @@ def main():
         print(f"  {class_name}: {count} записей ({percentage:.1f}%)")
 
     # Проверка совпадения классов
-    train_classes = set(y_train.unique())
+    train_classes = set(y_train.unique()) # преобразование в множество
     test_classes = set(y_test.unique())
 
     print(f"\n Классы в обучающей выборке: {sorted(train_classes)}")
@@ -102,7 +102,7 @@ def main():
 
     print("\nПреобразование данных...")
 
-    # Обучаем на обучающих данных
+    # Обучение на обучающих данных
     X_train_processed, y_train_encoded = preprocessor.fit_transform(X_train, y_train)
 
     # Преобразуем тестовые данные
@@ -121,13 +121,13 @@ def main():
     print("\n\n ШАГ 4: Обучение моделей")
     print("-" * 40)
 
-    # Создаем словарь с параметрами моделей
+    # Создание словаря с параметрами моделей
     model_params = {
         'Decision Tree': {
             'max_depth': 10,  # Ограничиваем глубину
-            'min_samples_split': 20,
-            'min_samples_leaf': 10,
-            'max_features': 'sqrt'
+            'min_samples_split': 20, # минимум 20 образцов для разделения
+            'min_samples_leaf': 10, # минимум 10 образцов в листе
+            'max_features': 'sqrt' 
         },
         'Gradient Boosting': {
             'n_estimators': 100,
@@ -139,8 +139,8 @@ def main():
             'max_features': 'sqrt'
         },
         'KNN': {
-        'n_neighbors': 50,
-        'weights': 'distance',
+        'n_neighbors': 50, # сглаживает шум
+        'weights': 'distance', # ближайшие соседи влияют сильнее
         'metric': 'minkowski',
         'p': 2
         },
@@ -151,8 +151,8 @@ def main():
         'min_samples_leaf': 15,
         'max_features': 'sqrt',
         'bootstrap': True,
-        'class_weight': 'balanced',
-        'n_jobs': -1
+        'class_weight': 'balanced', # без этого модель будет игнорировать редкие классы
+        'n_jobs': -1 # использование всех ядер процессора
         }
     }
 
@@ -175,7 +175,7 @@ def main():
 
     # Анализ переобучения
     print("\n Анализ переобучения:")
-    for _, row in comparison_df.iterrows():
+    for _, row in comparison_df.iterrows(): # итерация по строкам 
         if 'Train CV (Acc)' in row and 'Test Accuracy' in row:
             train_val = row['Train CV (Acc)']
             test_val = row['Test Accuracy']
@@ -220,7 +220,7 @@ def main():
             recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
             f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
 
-            support = np.sum(mask_true)
+            support = np.sum(mask_true) # количество образцов класса
 
             report_dict[class_name] = {
                 'precision': precision,
@@ -243,7 +243,7 @@ def main():
     }
 
     report_dict['weighted avg'] = {
-        'precision': np.average(precisions, weights=supports),
+        'precision': np.average(precisions, weights=supports), # средневзвешенное по support
         'recall': np.average(recalls, weights=supports),
         'f1-score': np.average(f1_scores, weights=supports),
         'support': np.sum(supports)
@@ -264,7 +264,7 @@ def main():
         print("\n1. Создание графика сравнения моделей...")
         
         # Подготовка данных
-        comparison_df['Test Accuracy'] = pd.to_numeric(comparison_df['Test Accuracy'], errors='coerce')
+        comparison_df['Test Accuracy'] = pd.to_numeric(comparison_df['Test Accuracy'], errors='coerce') # преобразование в числа 
         if 'Train CV (Acc)' in comparison_df.columns:
             comparison_df['Train CV (Acc)'] = pd.to_numeric(comparison_df['Train CV (Acc)'], errors='coerce')
             train_col = 'Train CV (Acc)'
@@ -460,9 +460,9 @@ def main():
         diff = abs(best_result['cv_mean'] - best_result['test_accuracy'])
         print(f"  • Разница CV/Test: {diff:.4f}")
         if diff > 0.05:
-            print(f"  ⚠ Внимание: возможное переобучение (разница > 0.05)")
+            print(f"Внимание: возможное переобучение (разница > 0.05)")
         else:
-            print(f"  ✓ Переобучение под контролем")
+            print(f"Переобучение под контролем")
 
     print(f"\n Распределение классов:")
     for class_name in class_names:
