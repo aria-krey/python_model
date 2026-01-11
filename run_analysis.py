@@ -14,6 +14,7 @@ from src.preprocessor import DataPreprocessor
 from src.models import ModelTrainer
 from sklearn.metrics import confusion_matrix
 import warnings
+from imblearn.over_sampling import SMOTE
 warnings.filterwarnings('ignore')
 
 # Настройка отображения
@@ -108,6 +109,23 @@ def main():
     # Преобразуем тестовые данные
     X_test_processed, y_test_encoded = preprocessor.transform(X_test, y_test)
 
+    print("\n Балансировка классов (SMOTE)...")
+
+    smote = SMOTE(
+        sampling_strategy='not majority',
+        random_state=42,
+        k_neighbors=5
+    )
+
+    X_train_balanced, y_train_balanced = smote.fit_resample(
+        X_train_processed,
+        y_train_encoded
+    )
+
+    print("Размеры после SMOTE:")
+    print("X_train:", X_train_balanced.shape)
+    print("y_train:", y_train_balanced.shape)
+
     print(f" Размер после обработки:")
     print(f"  X_train: {X_train_processed.shape}")
     print(f"  X_test: {X_test_processed.shape}")
@@ -159,10 +177,11 @@ def main():
     # Обучаем модели с параметрами против переобучения
     trainer = ModelTrainer(random_state=42)
     trainer.train_models(
-        X_train_processed, y_train_encoded,
-        X_test_processed, y_test_encoded,
-        model_params=model_params  # Передаем параметры здесь
+        X_train_balanced, y_train_balanced,   # ← SMOTE
+        X_test_processed, y_test_encoded,     # ← БЕЗ SMOTE
+        model_params=model_params
     )
+
     
     # 5. АНАЛИЗ РЕЗУЛЬТАТОВ
     print("\n\n ШАГ 5: Анализ результатов")
@@ -176,20 +195,16 @@ def main():
     # Анализ переобучения
     print("\n Анализ переобучения:")
     for _, row in comparison_df.iterrows():
-        if 'Train CV (Acc)' in row and 'Test Accuracy' in row:
-            train_val = row['Train CV (Acc)']
-            test_val = row['Test Accuracy']
-            
-            # Безопасная проверка NaN
-            train_val_float = float(train_val) if pd.notna(train_val) else 0
-            test_val_float = float(test_val) if pd.notna(test_val) else 0
-            
-            if train_val_float > 0 and test_val_float > 0:
-                diff = train_val_float - test_val_float
-                if diff > 0.05:
-                    print(f"  {row['Model']}: возможное переобучение (разница: {diff:.4f})")
-                else:
-                    print(f"  {row['Model']}: переобучение под контролем (разница: {diff:.4f})")
+        train_val = row['Train CV (F1)']
+        test_val = row['Test F1']
+
+        diff = abs(train_val - test_val)
+
+        if diff > 0.07:
+            print(f"  {row['Model']}: возможное переобучение (разница: {diff:.4f})")
+        else:
+            print(f"  {row['Model']}: переобучение под контролем (разница: {diff:.4f})")
+
 
     # Лучшая модель
     best_model_name, best_result = trainer.get_best_model()
@@ -264,10 +279,10 @@ def main():
         print("\n1. Создание графика сравнения моделей...")
         
         # Подготовка данных
-        comparison_df['Test Accuracy'] = pd.to_numeric(comparison_df['Test Accuracy'], errors='coerce')
-        if 'Train CV (Acc)' in comparison_df.columns:
-            comparison_df['Train CV (Acc)'] = pd.to_numeric(comparison_df['Train CV (Acc)'], errors='coerce')
-            train_col = 'Train CV (Acc)'
+        comparison_df['Test F1'] = pd.to_numeric(comparison_df['Test F1'], errors='coerce')
+        if 'Train CV (F1)' in comparison_df.columns:
+            comparison_df['Train CV (F1)'] = pd.to_numeric(comparison_df['Train CV (F1)'], errors='coerce')
+            train_col = 'Train CV (F1)'
         else:
             train_col = None
         
@@ -293,7 +308,7 @@ def main():
             plt.bar(x, test_acc, width, alpha=0.8, color='lightcoral')
         
         plt.xlabel('Модели', fontsize=12)
-        plt.ylabel('Accuracy', fontsize=12)
+        plt.ylabel('F1 macro', fontsize=12)
         plt.title('Сравнение точности моделей', fontsize=14, fontweight='bold')
         plt.xticks(x, models, rotation=45, ha='right')
         plt.grid(True, alpha=0.3, axis='y')
@@ -385,7 +400,7 @@ def main():
         print(f" Ошибка при создании матрицы ошибок: {e}")
 
     # 7. ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ 
-    print("\n\n ШАГ 7: Дополнительный анализ")
+    print("\n\n🔍 ШАГ 7: Дополнительный анализ")
     print("-" * 40)
 
     # Анализ важности признаков
@@ -425,7 +440,7 @@ def main():
 
     # Анализ ошибок классификации
     try:
-        print("\n Анализ ошибок классификации по классам:")
+        print("\n📊 Анализ ошибок классификации по классам:")
         error_analysis = pd.DataFrame({
             'True': y_test_original,
             'Predicted': y_pred_original,
