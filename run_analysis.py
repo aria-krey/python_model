@@ -14,7 +14,6 @@ from src.preprocessor import DataPreprocessor
 from src.models import ModelTrainer
 from sklearn.metrics import confusion_matrix
 import warnings
-from imblearn.over_sampling import SMOTE
 warnings.filterwarnings('ignore')
 
 # Настройка отображения
@@ -109,23 +108,6 @@ def main():
     # Преобразуем тестовые данные
     X_test_processed, y_test_encoded = preprocessor.transform(X_test, y_test)
 
-    print("\n Балансировка классов (SMOTE)...")
-
-    smote = SMOTE(
-        sampling_strategy='not majority',
-        random_state=42,
-        k_neighbors=5
-    )
-
-    X_train_balanced, y_train_balanced = smote.fit_resample(
-        X_train_processed,
-        y_train_encoded
-    )
-
-    print("Размеры после SMOTE:")
-    print("X_train:", X_train_balanced.shape)
-    print("y_train:", y_train_balanced.shape)
-
     print(f" Размер после обработки:")
     print(f"  X_train: {X_train_processed.shape}")
     print(f"  X_test: {X_test_processed.shape}")
@@ -177,12 +159,11 @@ def main():
     # Обучаем модели с параметрами против переобучения
     trainer = ModelTrainer(random_state=42)
     trainer.train_models(
-        X_train_balanced, y_train_balanced,   # ← SMOTE
-        X_test_processed, y_test_encoded,     # ← БЕЗ SMOTE
-        model_params=model_params
+        X_train_processed, y_train_encoded,
+        X_test_processed, y_test_encoded,
+        model_params=model_params  # Передаем параметры здесь
     )
 
-    
     # 5. АНАЛИЗ РЕЗУЛЬТАТОВ
     print("\n\n ШАГ 5: Анализ результатов")
     print("-" * 40)
@@ -195,16 +176,20 @@ def main():
     # Анализ переобучения
     print("\n Анализ переобучения:")
     for _, row in comparison_df.iterrows():
-        train_val = row['Train CV (F1)']
-        test_val = row['Test F1']
+        if 'Train CV (Acc)' in row and 'Test Accuracy' in row:
+            train_val = row['Train CV (Acc)']
+            test_val = row['Test Accuracy']
 
-        diff = abs(train_val - test_val)
+            # Безопасная проверка NaN
+            train_val_float = float(train_val) if pd.notna(train_val) else 0
+            test_val_float = float(test_val) if pd.notna(test_val) else 0
 
-        if diff > 0.07:
-            print(f"  {row['Model']}: возможное переобучение (разница: {diff:.4f})")
-        else:
-            print(f"  {row['Model']}: переобучение под контролем (разница: {diff:.4f})")
-
+            if train_val_float > 0 and test_val_float > 0:
+                diff = train_val_float - test_val_float
+                if diff > 0.05:
+                    print(f"  {row['Model']}: возможное переобучение (разница: {diff:.4f})")
+                else:
+                    print(f"  {row['Model']}: переобучение под контролем (разница: {diff:.4f})")
 
     # Лучшая модель
     best_model_name, best_result = trainer.get_best_model()
@@ -277,42 +262,42 @@ def main():
     try:
         # 1. График сравнения моделей
         print("\n1. Создание графика сравнения моделей...")
-        
+
         # Подготовка данных
-        comparison_df['Test F1'] = pd.to_numeric(comparison_df['Test F1'], errors='coerce')
-        if 'Train CV (F1)' in comparison_df.columns:
-            comparison_df['Train CV (F1)'] = pd.to_numeric(comparison_df['Train CV (F1)'], errors='coerce')
-            train_col = 'Train CV (F1)'
+        comparison_df['Test Accuracy'] = pd.to_numeric(comparison_df['Test Accuracy'], errors='coerce')
+        if 'Train CV (Acc)' in comparison_df.columns:
+            comparison_df['Train CV (Acc)'] = pd.to_numeric(comparison_df['Train CV (Acc)'], errors='coerce')
+            train_col = 'Train CV (Acc)'
         else:
             train_col = None
-        
+
         # Заполняем NaN
         comparison_df = comparison_df.fillna(0)
-        
+
         plt.figure(figsize=(12, 8))
-        
+
         models = comparison_df['Model']
         test_acc = comparison_df['Test Accuracy']
-        
+
         x = np.arange(len(models))
         width = 0.6
-        
+
         if train_col and train_col in comparison_df.columns:
             train_acc = comparison_df[train_col]
             width = 0.35
-            
+
             plt.bar(x - width/2, train_acc, width, label='Train CV', alpha=0.8, color='steelblue')
             plt.bar(x + width/2, test_acc, width, label='Test', alpha=0.8, color='lightcoral')
             plt.legend()
         else:
             plt.bar(x, test_acc, width, alpha=0.8, color='lightcoral')
-        
+
         plt.xlabel('Модели', fontsize=12)
-        plt.ylabel('F1 macro', fontsize=12)
+        plt.ylabel('Accuracy', fontsize=12)
         plt.title('Сравнение точности моделей', fontsize=14, fontweight='bold')
         plt.xticks(x, models, rotation=45, ha='right')
         plt.grid(True, alpha=0.3, axis='y')
-        
+
         # Добавление значений - БЕЗОПАСНЫЙ СПОСОБ
         for i, val in enumerate(test_acc):
             try:
@@ -323,7 +308,7 @@ def main():
                             ha='center', va='bottom', fontsize=9)
             except (ValueError, TypeError):
                 continue
-        
+
         if train_col and train_col in comparison_df.columns:
             for i, val in enumerate(train_acc):
                 try:
@@ -333,55 +318,55 @@ def main():
                                 ha='center', va='bottom', fontsize=9)
                 except (ValueError, TypeError):
                     continue
-        
+
         plt.tight_layout()
         plt.savefig('results/model_comparison.png', dpi=300, bbox_inches='tight')
         plt.show()
         print(" График сохранен: results/model_comparison.png")
-        
+
     except Exception as e:
         print(f" Ошибка при создании графика сравнения: {e}")
 
     try:
         # 2. Распределение классов 
         print("\n2. График распределения классов...")
-        
+
         plt.figure(figsize=(10, 6))
-        
+
         if not train_dist.empty and len(train_dist) > 0:
             colors = plt.cm.Set3(np.linspace(0, 1, len(train_dist)))
             train_dist.plot(kind='bar', color=colors)
-            
+
             plt.title('Распределение классов в обучающей выборке', fontsize=14, fontweight='bold')
             plt.xlabel('Класс', fontsize=12)
             plt.ylabel('Количество записей', fontsize=12)
             plt.xticks(rotation=45)
             plt.grid(True, alpha=0.3, axis='y')
-            
+
             # Добавление значений
             for i, v in enumerate(train_dist.values):
                 if not pd.isna(v):
                     plt.text(i, v + max(train_dist.values)*0.01, str(int(v)),
                             ha='center', va='bottom', fontsize=10)
-            
+
             plt.tight_layout()
             plt.savefig('results/class_distribution.png', dpi=300, bbox_inches='tight')
             plt.show()
             print(" График сохранен: results/class_distribution.png")
         else:
             print(" Нет данных для графика распределения классов")
-            
+
     except Exception as e:
         print(f" Ошибка при создании графика распределения: {e}")
 
     try:
         # 3. Матрица ошибок 
         print("\n3. Матрица ошибок для лучшей модели...")
-        
+
         if y_pred_best is not None and len(y_pred_best) > 0:
             # Создаем матрицу ошибок
             cm = confusion_matrix(y_test_encoded, y_pred_best)
-            
+
             plt.figure(figsize=(10, 8))
             sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                        xticklabels=class_names,
@@ -395,12 +380,12 @@ def main():
             print(f" Матрица ошибок сохранена: results/confusion_matrix.png")
         else:
             print(" Нет предсказаний для лучшей модели")
-            
+
     except Exception as e:
         print(f" Ошибка при создании матрицы ошибок: {e}")
 
     # 7. ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ 
-    print("\n\n🔍 ШАГ 7: Дополнительный анализ")
+    print("\n\n ШАГ 7: Дополнительный анализ")
     print("-" * 40)
 
     # Анализ важности признаков
@@ -440,7 +425,7 @@ def main():
 
     # Анализ ошибок классификации
     try:
-        print("\n📊 Анализ ошибок классификации по классам:")
+        print("\n Анализ ошибок классификации по классам:")
         error_analysis = pd.DataFrame({
             'True': y_test_original,
             'Predicted': y_pred_original,
@@ -470,7 +455,7 @@ def main():
     print(f"\n Результаты:")
     print(f"  • Лучшая модель: {best_model_name}")
     print(f"  • Точность на тесте: {best_result['test_accuracy']:.4f}")
-    
+
     if best_result.get('cv_mean') is not None:
         diff = abs(best_result['cv_mean'] - best_result['test_accuracy'])
         print(f"  • Разница CV/Test: {diff:.4f}")
@@ -502,17 +487,17 @@ def main():
 
     # Сохранение результатов
     print(f"\n Сохранение результатов...")
-    
+
     try:
         # Сохранение сравнения моделей
         comparison_df.to_csv('results/model_comparison.csv', index=False)
-        
+
         # Сохранение детального отчета
         report_df.to_csv('results/detailed_report.csv')
-        
+
         # Сохранение распределения классов
         pd.Series(y_train).value_counts().to_csv('results/class_distribution.csv')
-        
+
         # Сохранение конфигурации
         with open('results/config.txt', 'w', encoding='utf-8') as f:
             f.write(f"Датасет: NSL-KDD\n")
@@ -520,7 +505,7 @@ def main():
             f.write(f"Лучшая модель: {best_model_name}\n")
             f.write(f"Точность: {best_result['test_accuracy']:.4f}\n")
             f.write(f"Классы: {', '.join(class_names)}\n")
-        
+
         print(" Результаты сохранены в папке 'results/'")
     except Exception as e:
         print(f" Ошибка при сохранении файлов: {e}")
