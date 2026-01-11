@@ -1,0 +1,5 @@
+Model,Train CV (F1),Test Accuracy,Difference
+Random Forest,0.8255,0.7745,0.051
+KNN,0.7716,0.7498,0.0219
+Decision Tree,0.7019,0.7191,0.0172
+Gradient Boosting,0.6201,0.6644,0.0443
